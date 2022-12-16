@@ -15,10 +15,11 @@ DiskManager::DiskManager() { memset(fd2pageno_, 0, MAX_FD * (sizeof(std::atomic<
  */
 void DiskManager::write_page(int fd, page_id_t page_no, const char *offset, int num_bytes) {
     // Todo:
-    // 1.lseek()定位到文件头，通过(fd,page_no)可以定位指定页面及其在磁盘文件中的偏移量
-    // 2.调用write()函数
+    // 1.lseek() 定位到文件头，通过 (fd,page_no) 可以定位指定页面及其在磁盘文件中的偏移量
+    // 2.调用 write() 函数
     // 注意处理异常
-
+    assert(lseek(fd, page_no, SEEK_SET) != (off_t)(-1));
+    assert(write(fd, offset, num_bytes) != -1);
 }
 
 /**
@@ -26,10 +27,11 @@ void DiskManager::write_page(int fd, page_id_t page_no, const char *offset, int 
  */
 void DiskManager::read_page(int fd, page_id_t page_no, char *offset, int num_bytes) {
     // Todo:
-    // 1.lseek()定位到文件头，通过(fd,page_no)可以定位指定页面及其在磁盘文件中的偏移量
-    // 2.调用read()函数
+    // 1.lseek() 定位到文件头，通过 (fd,page_no) 可以定位指定页面及其在磁盘文件中的偏移量
+    // 2.调用 read() 函数
     // 注意处理异常
-
+    assert(lseek(fd, page_no, SEEK_SET) != (off_t)(-1));
+    assert(read(fd, offset, num_bytes) != -1);
 }
 
 /**
@@ -38,9 +40,12 @@ void DiskManager::read_page(int fd, page_id_t page_no, char *offset, int num_byt
  */
 page_id_t DiskManager::AllocatePage(int fd) {
     // Todo:
-    // 简单的自增分配策略，指定文件的页面编号加1
-
-    return -1;
+    // 简单的自增分配策略，指定文件的页面编号加 1
+    static int start_page_no = 0;
+    fd2pageno_[fd]++;
+    set_fd2pageno(fd, fd2pageno_[fd]);
+    return fd2pageno_[fd];
+    //return -1;
 }
 
 /**
@@ -58,7 +63,7 @@ bool DiskManager::is_dir(const std::string &path) {
 void DiskManager::create_dir(const std::string &path) {
     // Create a subdirectory
     std::string cmd = "mkdir " + path;
-    if (system(cmd.c_str()) < 0) {  // 创建一个名为path的目录
+    if (system(cmd.c_str()) < 0) {  // 创建一个名为 path 的目录
         throw UnixError();
     }
 }
@@ -75,9 +80,12 @@ void DiskManager::destroy_dir(const std::string &path) {
  */
 bool DiskManager::is_file(const std::string &path) {
     // Todo:
-    // 用struct stat获取文件信息
-
-    return false;
+    // 用 struct stat 获取文件信息
+    struct stat buf;
+    int err = stat(path.c_str(), &buf);
+    if (err == -1 && errno == ENOENT)
+        return false;
+    return true;
 }
 
 /**
@@ -85,9 +93,9 @@ bool DiskManager::is_file(const std::string &path) {
  */
 void DiskManager::create_file(const std::string &path) {
     // Todo:
-    // 调用open()函数，使用O_CREAT模式
+    // 调用 open() 函数，使用 O_CREAT 模式
     // 注意不能重复创建相同文件
-
+    int fd = open(path.c_str(), O_CREAT);
 }
 
 /**
@@ -95,9 +103,13 @@ void DiskManager::create_file(const std::string &path) {
  */
 void DiskManager::destroy_file(const std::string &path) {
     // Todo:
-    // 调用unlink()函数
+    // 调用 unlink() 函数
     // 注意不能删除未关闭的文件
-    
+    if (path2fd_.count(path.c_str())) {
+        puts("ERROR:尝试删除未关闭的文件");
+        return;
+    }
+    int fd = unlink(path.c_str());
 }
 
 /**
@@ -105,10 +117,17 @@ void DiskManager::destroy_file(const std::string &path) {
  */
 int DiskManager::open_file(const std::string &path) {
     // Todo:
-    // 调用open()函数，使用O_RDWR模式
+    // 调用 open() 函数，使用 O_RDWR 模式
     // 注意不能重复打开相同文件，并且需要更新文件打开列表
-
-    return -1;
+    if (path2fd_.count(path.c_str())) {
+        puts("ERROR:尝试打开已打开的文件");
+        return -1;
+    }
+    int fd = open(path.c_str(), O_RDWR);
+    path2fd_[path.c_str()] = fd;
+    fd2path_[fd] = path.c_str();
+    return fd;
+    //return -1;
 }
 
 /**
@@ -116,9 +135,16 @@ int DiskManager::open_file(const std::string &path) {
  */
 void DiskManager::close_file(int fd) {
     // Todo:
-    // 调用close()函数
+    // 调用 close() 函数
     // 注意不能关闭未打开的文件，并且需要更新文件打开列表
-    
+    if (fd2path_.count(fd)) {
+        close(fd);
+        path2fd_.erase(fd2path_[fd]);
+        fd2path_.erase(fd);
+    } else {
+        puts("ERROR:尝试关闭未打开的文件");
+        return;
+    }
 }
 
 int DiskManager::GetFileSize(const std::string &file_name) {
