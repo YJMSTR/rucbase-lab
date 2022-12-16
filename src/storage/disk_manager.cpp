@@ -44,7 +44,6 @@ page_id_t DiskManager::AllocatePage(int fd) {
     fd2pageno_[fd]++;
     set_fd2pageno(fd, fd2pageno_[fd]);
     return fd2pageno_[fd];
-    //return -1;
 }
 
 /**
@@ -94,7 +93,10 @@ void DiskManager::create_file(const std::string &path) {
     // Todo:
     // 调用 open() 函数，使用 O_CREAT 模式
     // 注意不能重复创建相同文件
-    int fd = open(path.c_str(), O_CREAT);
+    if (is_file(path)) {
+        throw FileExistsError(path);
+    }
+    open(path.c_str(), O_CREAT);
 }
 
 /**
@@ -105,10 +107,9 @@ void DiskManager::destroy_file(const std::string &path) {
     // 调用 unlink() 函数
     // 注意不能删除未关闭的文件
     if (path2fd_.count(path.c_str())) {
-        puts("ERROR:尝试删除未关闭的文件");
-        return;
+        throw FileNotClosedError(path);
     }
-    int fd = unlink(path.c_str());
+    unlink(path.c_str());
 }
 
 /**
@@ -119,14 +120,12 @@ int DiskManager::open_file(const std::string &path) {
     // 调用 open() 函数，使用 O_RDWR 模式
     // 注意不能重复打开相同文件，并且需要更新文件打开列表
     if (path2fd_.count(path.c_str())) {
-        puts("ERROR:尝试打开已打开的文件");
-        return -1;
+        throw FileNotClosedError(path);
     }
     int fd = open(path.c_str(), O_RDWR);
     path2fd_[path.c_str()] = fd;
     fd2path_[fd] = path.c_str();
     return fd;
-    //return -1;
 }
 
 /**
@@ -141,8 +140,7 @@ void DiskManager::close_file(int fd) {
         path2fd_.erase(fd2path_[fd]);
         fd2path_.erase(fd);
     } else {
-        puts("ERROR:尝试关闭未打开的文件");
-        return;
+        throw FileNotOpenError(fd);
     }
 }
 
