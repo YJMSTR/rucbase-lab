@@ -51,9 +51,10 @@ void LRUReplacer::Unpin(frame_id_t frame_id) {
     //  支持并发锁
     //  选择一个 frame 取消固定
     std::scoped_lock lock{latch_};
+    if (LRUhash_.count(frame_id)) return;
     LRUlist_.push_front(frame_id);
     std::list<frame_id_t>::iterator it = LRUlist_.begin();
-    LRUhash_.insert(frame_id, *it);
+    LRUhash_[frame_id] = it;
 }
 
 /** @return replacer 中能够 victim 的数量 */
