@@ -41,7 +41,6 @@ void DiskManager::read_page(int fd, page_id_t page_no, char *offset, int num_byt
 page_id_t DiskManager::AllocatePage(int fd) {
     // Todo:
     // 简单的自增分配策略，指定文件的页面编号加 1
-    static int start_page_no = 0;
     fd2pageno_[fd]++;
     set_fd2pageno(fd, fd2pageno_[fd]);
     return fd2pageno_[fd];
