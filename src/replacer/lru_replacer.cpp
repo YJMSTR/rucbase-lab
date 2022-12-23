@@ -18,10 +18,12 @@ bool LRUReplacer::Victim(frame_id_t *frame_id) {
     //  利用 lru_replacer 中的 LRUlist_,LRUHash_实现 LRU 策略
     //  选择合适的 frame 指定为淘汰页面，赋值给*frame_id
     if (LRUlist_.empty()) {
-        frame_id = NULL;
+        frame_id = nullptr;
+        //puts("frame_id == NULL");
         return false;
     }
     *frame_id = *LRUlist_.rbegin();
+    //printf ("%d\n", *frame_id);
     LRUlist_.pop_back();
     LRUhash_.erase(*frame_id);
     return true;

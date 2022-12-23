@@ -37,7 +37,7 @@
 constexpr int MAX_FILES = 32;
 constexpr int MAX_PAGES = 128;
 constexpr size_t TEST_BUFFER_POOL_SIZE = MAX_FILES * MAX_PAGES;
-const std::string TEST_DB_NAME = "BufferPoolManagerTest_db";  // 以TEST_DB_NAME作为存放测试文件的根目录名
+const std::string TEST_DB_NAME = "BufferPoolManagerTest_db";  // 以 TEST_DB_NAME 作为存放测试文件的根目录名
 
 // Add by jiawen
 class BufferPoolManagerTest : public ::testing::Test {
@@ -48,7 +48,7 @@ class BufferPoolManagerTest : public ::testing::Test {
     // This function is called before every test.
     void SetUp() override {
         ::testing::Test::SetUp();
-        // 对于每个测试点，创建一个disk manager
+        // 对于每个测试点，创建一个 disk manager
         disk_manager_ = std::make_unique<DiskManager>();
         // 如果测试目录存在，则先删除原目录
         if (disk_manager_->is_dir(TEST_DB_NAME)) {
@@ -73,7 +73,7 @@ class BufferPoolManagerTest : public ::testing::Test {
     };
 
     /**
-     * @brief 将buf填充size个字节的随机数据
+     * @brief 将 buf 填充 size 个字节的随机数据
      */
     void rand_buf(char *buf, int size) {
         srand((unsigned)time(nullptr));
@@ -84,7 +84,7 @@ class BufferPoolManagerTest : public ::testing::Test {
     }
 
     /**
-     * @brief 随机获取mock中的键
+     * @brief 随机获取 mock 中的键
      */
     int rand_fd(std::unordered_map<int, char *> mock) {
         assert(mock.size() == MAX_FILES);
@@ -99,7 +99,7 @@ class BufferPoolManagerTest : public ::testing::Test {
 
 /**
  * @brief 简单测试缓冲池的基本功能（单文件）
- * @note 生成测试文件simple_test
+ * @note 生成测试文件 simple_test
  * @note lab1 计分：5 points
  */
 TEST_F(BufferPoolManagerTest, SimpleTest) {
@@ -142,9 +142,9 @@ TEST_F(BufferPoolManagerTest, SimpleTest) {
     for (int i = 0; i < 4; ++i) {
         EXPECT_NE(nullptr, bpm->NewPage(&tmp_page_id));
     }
-
     // Scenario: We should be able to fetch the data we wrote a while ago.
     page0 = bpm->FetchPage(PageId{fd, 0});
+    //printf("??????%s\n", *page0->GetData());
     EXPECT_EQ(0, strcmp(page0->GetData(), "Hello"));
     EXPECT_EQ(true, bpm->UnpinPage(PageId{fd, 0}, true));
     // NewPage again, and now all buffers are pinned. Page 0 would be failed to fetch.
@@ -154,10 +154,11 @@ TEST_F(BufferPoolManagerTest, SimpleTest) {
     bpm->FlushAllPages(fd);
 
     disk_manager_->close_file(fd);
+    //while(1);
 }
 
 /**
- * @brief 在SimpleTest的基础上加大数据量（单文件），生成测试文件large_scale_test
+ * @brief 在 SimpleTest 的基础上加大数据量（单文件），生成测试文件 large_scale_test
  * @note lab1 计分：10 points
  */
 TEST_F(BufferPoolManagerTest, LargeScaleTest) {
@@ -189,6 +190,8 @@ TEST_F(BufferPoolManagerTest, LargeScaleTest) {
     for (int i = 0; i < scale; i++) {
         auto page = bpm->FetchPage(page_ids[i]);
         EXPECT_NE(nullptr, page);
+        // puts(std::to_string(page_ids[i].page_no).c_str());
+        // puts(page->GetData());
         EXPECT_EQ(0, std::strcmp(std::to_string(page_ids[i].page_no).c_str(), page->GetData()));
         EXPECT_EQ(true, bpm->UnpinPage(page_ids[i], true));
         page_ids.push_back(tmp_page_id);
@@ -203,15 +206,15 @@ TEST_F(BufferPoolManagerTest, LargeScaleTest) {
 
 /**
  * @brief 多文件测试
- * @note 生成若干测试文件multiple_files_test_*
+ * @note 生成若干测试文件 multiple_files_test_*
  * @note lab1 计分：10 points
  */
 TEST_F(BufferPoolManagerTest, MultipleFilesTest) {
     const size_t buffer_size = MAX_FILES * MAX_PAGES / 2;
     auto buffer_pool_manager = std::make_unique<BufferPoolManager>(buffer_size, disk_manager_.get());
 
-    // mock记录生成文件的(文件fd, page在内存中的首地址)
-    // page在内存中的首地址是page在内存中的备份
+    // mock 记录生成文件的 (文件 fd, page 在内存中的首地址)
+    // page 在内存中的首地址是 page 在内存中的备份
     std::unordered_map<int, char *> mock;  // fd -> page address
 
     std::vector<std::string> filenames(MAX_FILES);  // MAX_FILES=32
@@ -226,10 +229,10 @@ TEST_F(BufferPoolManagerTest, MultipleFilesTest) {
         disk_manager_->create_file(filename);
         int fd = disk_manager_->open_file(filename);
 
-        mock[fd] = new char[PAGE_SIZE * MAX_PAGES];  // 申请PAGE_SIZE * MAX_PAGES个字节的内存空间，mock[fd]记录其首地址
+        mock[fd] = new char[PAGE_SIZE * MAX_PAGES];  // 申请 PAGE_SIZE * MAX_PAGES 个字节的内存空间，mock[fd] 记录其首地址
         fd2name[fd] = filename;
 
-        disk_manager_->set_fd2pageno(fd, 0);  // 设置diskmanager在fd对应的文件中从0开始分配page_no
+        disk_manager_->set_fd2pageno(fd, 0);  // 设置 diskmanager 在 fd 对应的文件中从 0 开始分配 page_no
     }
 
     char buf[PAGE_SIZE] = {0};
@@ -238,7 +241,7 @@ TEST_F(BufferPoolManagerTest, MultipleFilesTest) {
     for (auto &fh : mock) {
         int fd = fh.first;
         for (page_id_t i = 0; i < MAX_PAGES; i++) {
-            rand_buf(buf, PAGE_SIZE);  // 生成buf，将buf填充PAGE_SIZE个字节的随机数据
+            rand_buf(buf, PAGE_SIZE);  // 生成 buf，将 buf 填充 PAGE_SIZE 个字节的随机数据
 
             PageId tmp_page_id = {.fd = fd, .page_no = INVALID_PAGE_ID};
             Page *page = buffer_pool_manager->NewPage(&tmp_page_id);  // pin the page
@@ -314,7 +317,7 @@ TEST_F(BufferPoolManagerTest, MultipleFilesTest) {
 
 /**
  * @brief 缓冲池并发测试（单文件）
- * @note 生成测试文件concurrency_test
+ * @note 生成测试文件 concurrency_test
  * @note lab1 计分：15 points
  */
 TEST_F(BufferPoolManagerTest, ConcurrencyTest) {
