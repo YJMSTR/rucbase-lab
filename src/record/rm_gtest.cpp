@@ -62,6 +62,7 @@ void check_equal(const RmFileHandle *file_handle,
     // Test RM scan
     size_t num_records = 0;
     for (RmScan scan(file_handle); !scan.is_end(); scan.next()) {
+         //printf("num_records == %d\n rid = %d %d\n", num_records, scan.rid().page_no, scan.rid().slot_no);
         assert(mock.count(scan.rid()) > 0);
         auto rec = file_handle->get_record(scan.rid(), context);
         assert(memcmp(rec->data, mock.at(scan.rid()).c_str(), file_handle->file_hdr_.record_size) == 0);
@@ -76,7 +77,7 @@ std::ostream &operator<<(std::ostream &os, const Rid &rid) {
 }
 
 /**
- * @brief 简单测试record的基本功能
+ * @brief 简单测试 record 的基本功能
  * @note lab1 计分：15 points
  */
 TEST(RecordManagerTest, SimpleTest) {
@@ -86,7 +87,7 @@ TEST(RecordManagerTest, SimpleTest) {
     int offset = 0;
     Context *context = new Context(nullptr, nullptr, nullptr, result, &offset);
 
-    // 创建RmManager类的对象rm_manager
+    // 创建 RmManager 类的对象 rm_manager
     auto disk_manager = std::make_unique<DiskManager>();
     auto buffer_pool_manager = std::make_unique<BufferPoolManager>(BUFFER_POOL_SIZE, disk_manager.get());
     auto rm_manager = std::make_unique<RmManager>(disk_manager.get(), buffer_pool_manager.get());
@@ -95,18 +96,18 @@ TEST(RecordManagerTest, SimpleTest) {
 
     std::string filename = "abc.txt";
 
-    int record_size = 4 + rand() % 256;  // 元组大小随便设置，只要不超过RM_MAX_RECORD_SIZE
+    int record_size = 4 + rand() % 256;  // 元组大小随便设置，只要不超过 RM_MAX_RECORD_SIZE
     // test files
     {
         // 删除残留的同名文件
         if (disk_manager->is_file(filename)) {
             disk_manager->destroy_file(filename);
         }
-        // 将file header写入到磁盘中的filename文件
+        // 将 file header 写入到磁盘中的 filename 文件
         rm_manager->create_file(filename, record_size);
-        // 将磁盘中的filename文件读出到内存中的file handle的file header
+        // 将磁盘中的 filename 文件读出到内存中的 file handle 的 file header
         std::unique_ptr<RmFileHandle> file_handle = rm_manager->open_file(filename);
-        // 检查filename文件在内存中的file header的参数
+        // 检查 filename 文件在内存中的 file header 的参数
         assert(file_handle->file_hdr_.record_size == record_size);
         assert(file_handle->file_hdr_.first_free_page_no == RM_NO_PAGE);
         assert(file_handle->file_hdr_.num_pages == 1);
@@ -179,13 +180,13 @@ TEST(RecordManagerTest, SimpleTest) {
 }
 
 /**
- * @brief 多文件测试record
+ * @brief 多文件测试 record
  * @note lab1 计分：15 points
  */
 TEST(RecordManagerTest, MultipleFilesTest) {
     srand((unsigned)time(nullptr));
 
-    // 创建RmManager类的对象rm_manager
+    // 创建 RmManager 类的对象 rm_manager
     auto disk_manager = std::make_unique<DiskManager>();
     auto buffer_pool_manager = std::make_unique<BufferPoolManager>(BUFFER_POOL_SIZE, disk_manager.get());
     auto rm_manager = std::make_unique<RmManager>(disk_manager.get(), buffer_pool_manager.get());
@@ -201,18 +202,18 @@ TEST(RecordManagerTest, MultipleFilesTest) {
     for (int i = 0; i < MAX_FILES; i++) {
         std::string filename = filenames[i];
 
-        int record_size = 4 + rand() % 256;  // 元组大小随便设置，只要不超过RM_MAX_RECORD_SIZE
+        int record_size = 4 + rand() % 256;  // 元组大小随便设置，只要不超过 RM_MAX_RECORD_SIZE
 
         // 删除残留的同名文件
         if (disk_manager->is_file(filename)) {
             disk_manager->destroy_file(filename);
         }
 
-        // 将file header写入到磁盘中的filename文件
+        // 将 file header 写入到磁盘中的 filename 文件
         rm_manager->create_file(filename, record_size);
-        // 将磁盘中的filename文件读出到内存中的file handle的file header
+        // 将磁盘中的 filename 文件读出到内存中的 file handle 的 file header
         std::unique_ptr<RmFileHandle> file_handle = rm_manager->open_file(filename);
-        // 检查filename文件在内存中的file header的参数
+        // 检查 filename 文件在内存中的 file header 的参数
         assert(file_handle->file_hdr_.record_size == record_size);
         assert(file_handle->file_hdr_.first_free_page_no == RM_NO_PAGE);
         // printf("file_handle->file_hdr_.num_pages=%d\n", file_handle->file_hdr_.num_pages);
