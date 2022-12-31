@@ -1,71 +1,93 @@
 #include "ix_node_handle.h"
 
 /**
- * @brief 在当前node中查找第一个>=target的key_idx
+ * @brief 在当前 node 中查找第一个>=target 的 key_idx
  *
- * @return key_idx，范围为[0,num_key)，如果返回的key_idx=num_key，则表示target大于最后一个key
- * @note 返回key index（同时也是rid index），作为slot no
+ * @return key_idx，范围为 [0,num_key)，如果返回的 key_idx=num_key，则表示 target 大于最后一个 key
+ * @note 返回 key index（同时也是 rid index），作为 slot no
  */
 int IxNodeHandle::lower_bound(const char *target) const {
     // Todo:
-    // 查找当前节点中第一个大于等于target的key，并返回key的位置给上层
-    // 提示: 可以采用多种查找方式，如顺序遍历、二分查找等；使用ix_compare()函数进行比较
-
-    return -1;
+    // 查找当前节点中第一个大于等于 target 的 key，并返回 key 的位置给上层
+    // 提示：可以采用多种查找方式，如顺序遍历、二分查找等；使用 ix_compare() 函数进行比较
+    int l = 0, r = page_hdr->num_key;
+    while (l < r) {
+        int mid = l + r >> 1;
+        if (ix_compare(target, get_key(mid),  file_hdr->col_type, file_hdr->col_len) > 0) {
+            l = mid + 1;
+        } else {
+            r = mid;
+        }
+    }
+    return l;
 }
 
 /**
- * @brief 在当前node中查找第一个>target的key_idx
+ * @brief 在当前 node 中查找第一个>target 的 key_idx
  *
- * @return key_idx，范围为[1,num_key)，如果返回的key_idx=num_key，则表示target大于等于最后一个key
- * @note 注意此处的范围从1开始
+ * @return key_idx，范围为 [1,num_key)，如果返回的 key_idx=num_key，则表示 target 大于等于最后一个 key
+ * @note 注意此处的范围从 1 开始
  */
 int IxNodeHandle::upper_bound(const char *target) const {
     // Todo:
-    // 查找当前节点中第一个大于target的key，并返回key的位置给上层
-    // 提示: 可以采用多种查找方式：顺序遍历、二分查找等；使用ix_compare()函数进行比较
-
-    return -1;
+    // 查找当前节点中第一个大于 target 的 key，并返回 key 的位置给上层
+    // 提示：可以采用多种查找方式：顺序遍历、二分查找等；使用 ix_compare() 函数进行比较
+    int l = 1, r = page_hdr->num_key;
+    while (l < r) {
+        int mid = l + r >> 1;
+        if (ix_compare(target, get_key(mid),  file_hdr->col_type, file_hdr->col_len) >= 0) {
+            l = mid + 1;
+        } else {
+            r = mid;
+        }
+    }
+    return l;
 }
 
 /**
- * @brief 用于叶子结点根据key来查找该结点中的键值对
- * 值value作为传出参数，函数返回是否查找成功
+ * @brief 用于叶子结点根据 key 来查找该结点中的键值对
+ * 值 value 作为传出参数，函数返回是否查找成功
  *
- * @param key 目标key
- * @param[out] value 传出参数，目标key对应的Rid
- * @return 目标key是否存在
+ * @param key 目标 key
+ * @param[out] value 传出参数，目标 key 对应的 Rid
+ * @return 目标 key 是否存在
  */
 bool IxNodeHandle::LeafLookup(const char *key, Rid **value) {
     // Todo:
-    // 1. 在叶子节点中获取目标key所在位置
-    // 2. 判断目标key是否存在
-    // 3. 如果存在，获取key对应的Rid，并赋值给传出参数value
-    // 提示：可以调用lower_bound()和get_rid()函数。
-
+    // 1. 在叶子节点中获取目标 key 所在位置
+    // 2. 判断目标 key 是否存在
+    // 3. 如果存在，获取 key 对应的 Rid，并赋值给传出参数 value
+    // 提示：可以调用 lower_bound() 和 get_rid() 函数。
+    int slot_no = IxNodeHandle::lower_bound(key);
+    if (slot_no != page_hdr->num_key && ix_compare(get_key(slot_no), key, file_hdr->col_type, file_hdr->col_len) == 0) {
+        Rid *rid = get_rid(slot_no);
+        *value = rid;   //修改指针的值
+        return true;
+    }
     return false;
 }
 
 /**
- * 用于内部结点（非叶子节点）查找目标key所在的孩子结点（子树）
- * @param key 目标key
- * @return page_id_t 目标key所在的孩子节点（子树）的存储页面编号
+ * 用于内部结点（非叶子节点）查找目标 key 所在的孩子结点（子树）
+ * @param key 目标 key
+ * @return page_id_t 目标 key 所在的孩子节点（子树）的存储页面编号
  */
 page_id_t IxNodeHandle::InternalLookup(const char *key) {
     // Todo:
-    // 1. 查找当前非叶子节点中目标key所在孩子节点（子树）的位置
+    // 1. 查找当前非叶子节点中目标 key 所在孩子节点（子树）的位置
     // 2. 获取该孩子节点（子树）所在页面的编号
     // 3. 返回页面编号
-
-    return -1;
+    int slot_no = upper_bound(key);
+    slot_no--;
+    return get_rid(slot_no)->page_no;
 }
 
 /**
- * @brief 在指定位置插入n个连续的键值对
- * 将key的前n位插入到原来keys中的pos位置；将rid的前n位插入到原来rids中的pos位置
+ * @brief 在指定位置插入 n 个连续的键值对
+ * 将 key 的前 n 位插入到原来 keys 中的 pos 位置；将 rid 的前 n 位插入到原来 rids 中的 pos 位置
  *
  * @param pos 要插入键值对的位置
- * @param (key, rid) 连续键值对的起始地址，也就是第一个键值对，可以通过(key, rid)来获取n个键值对
+ * @param (key, rid) 连续键值对的起始地址，也就是第一个键值对，可以通过 (key, rid) 来获取 n 个键值对
  * @param n 键值对数量
  * @note [0,pos)           [pos,num_key)
  *                            key_slot
@@ -76,11 +98,11 @@ page_id_t IxNodeHandle::InternalLookup(const char *key) {
  */
 void IxNodeHandle::insert_pairs(int pos, const char *key, const Rid *rid, int n) {
     // Todo:
-    // 1. 判断pos的合法性
-    // 2. 通过key获取n个连续键值对的key值，并把n个key值插入到pos位置
-    // 3. 通过rid获取n个连续键值对的rid值，并把n个rid值插入到pos位置
+    // 1. 判断 pos 的合法性
+    // 2. 通过 key 获取 n 个连续键值对的 key 值，并把 n 个 key 值插入到 pos 位置
+    // 3. 通过 rid 获取 n 个连续键值对的 rid 值，并把 n 个 rid 值插入到 pos 位置
     // 4. 更新当前节点的键数量
-
+    
 }
 
 /**
@@ -98,8 +120,8 @@ void IxNodeHandle::insert_pair(int pos, const char *key, const Rid &rid) { inser
 int IxNodeHandle::Insert(const char *key, const Rid &value) {
     // Todo:
     // 1. 查找要插入的键值对应该插入到当前节点的哪个位置
-    // 2. 如果key重复则不插入
-    // 3. 如果key不重复则插入键值对
+    // 2. 如果 key 重复则不插入
+    // 3. 如果 key 不重复则插入键值对
     // 4. 返回完成插入操作之后的键值对数量
 
     return -1;
@@ -112,16 +134,16 @@ int IxNodeHandle::Insert(const char *key, const Rid &value) {
  */
 void IxNodeHandle::erase_pair(int pos) {
     // Todo:
-    // 1. 删除该位置的key
-    // 2. 删除该位置的rid
+    // 1. 删除该位置的 key
+    // 2. 删除该位置的 rid
     // 3. 更新结点的键值对数量
 
 }
 
 /**
- * @brief 用于在结点中删除指定key的键值对。函数返回删除后的键值对数量
+ * @brief 用于在结点中删除指定 key 的键值对。函数返回删除后的键值对数量
  *
- * @param key 要删除的键值对key值
+ * @param key 要删除的键值对 key 值
  * @return 完成删除操作后的键值对数量
  */
 int IxNodeHandle::Remove(const char *key) {
@@ -134,7 +156,7 @@ int IxNodeHandle::Remove(const char *key) {
 }
 
 /**
- * @brief 由parent调用，寻找child，返回child在parent中的rid_idx∈[0,page_hdr->num_key)
+ * @brief 由 parent 调用，寻找 child，返回 child 在 parent 中的 rid_idx∈[0,page_hdr->num_key)
  *
  * @param child
  * @return int
