@@ -26,8 +26,10 @@ IxNodeHandle *IxIndexHandle::FindLeafPage(const char *key, Operation operation, 
     // 3. 找到包含该 key 值的叶子结点停止查找，并返回叶子节点
     IxNodeHandle *node = FetchNode(file_hdr_.root_page);
     while (!node->IsLeafPage()) {
+        IxNodeHandle *parent = node;
         int ret = node->InternalLookup(key);
         node = FetchNode(ret);
+        buffer_pool_manager_->UnpinPage(parent->GetPageId(), false);
     } 
     return node;
 }
@@ -71,8 +73,24 @@ bool IxIndexHandle::insert_entry(const char *key, const Rid &value, Transaction 
     // 2. 在该叶子节点中插入键值对
     // 3. 如果结点已满，分裂结点，并把新结点的相关信息插入父节点
     // 提示：记得 unpin page；若当前叶子节点是最右叶子节点，则需要更新 file_hdr_.last_leaf；记得处理并发的上锁
-
-    return false;
+    std::scoped_lock lock{root_latch_};
+    IxNodeHandle *node = FindLeafPage(key, Operation::FIND, transaction);
+    int old_size = node->GetSize();
+    if (node->Insert(key, value) == old_size) {
+        //重复键值对，无法插入
+        buffer_pool_manager_->UnpinPage(node->GetPageId(), false);
+        return false;
+    }
+    if (node->page_hdr->num_key == file_hdr_.btree_order) {
+        IxNodeHandle *node2 = Split(node);
+        if (file_hdr_.last_leaf == node->GetPageNo()) {
+            file_hdr_.last_leaf = node2->GetPageNo();
+        }
+        InsertIntoParent(node, node2->get_key(0), node2, transaction);
+        assert(buffer_pool_manager_->UnpinPage(node2->GetPageId(), true));
+    }
+    assert(buffer_pool_manager_->UnpinPage(node->GetPageId(), true));
+    return true;
 }
 
 /**
@@ -89,8 +107,30 @@ IxNodeHandle *IxIndexHandle::Split(IxNodeHandle *node) {
     // 2. 如果新的右兄弟结点是叶子结点，更新新旧节点的 prev_leaf 和 next_leaf 指针
     //    为新节点分配键值对，更新旧节点的键值对数记录
     // 3. 如果新的右兄弟结点不是叶子结点，更新该结点的所有孩子结点的父节点信息 (使用 IxIndexHandle::maintain_child())
-
-    return nullptr;
+    
+    IxNodeHandle *new_node = CreateNode(); 
+    new_node->page_hdr->is_leaf = node->page_hdr->is_leaf;
+    new_node->page_hdr->parent = node->page_hdr->parent; 
+    new_node->page_hdr->next_free_page_no = INVALID_PAGE_ID;
+    new_node->page_hdr->num_key = 0;
+    int mid = (node->page_hdr->num_key - 1) / 2, delta = node->page_hdr->num_key - mid - 1;  //[0, mid] 归左边 
+    new_node->insert_pairs(0, node->get_key(mid + 1), node->get_rid(mid + 1), delta);
+    node->page_hdr->num_key = mid + 1;
+    new_node->page_hdr->num_key = delta;
+    if (node->IsLeafPage()) {
+        new_node->page_hdr->next_leaf = node->page_hdr->next_leaf;
+        node->page_hdr->next_leaf = new_node->GetPageNo();
+        new_node->page_hdr->prev_leaf = node->GetPageNo();
+        // 还要更新下一个结点的 prev 结点
+        IxNodeHandle* nn_leaf = FetchNode(new_node->page_hdr->next_leaf);
+        nn_leaf->page_hdr->prev_leaf = new_node->GetPageNo();
+        buffer_pool_manager_->UnpinPage(nn_leaf->GetPageId(), true);
+    } else {
+        for (int i = 0; i < new_node->page_hdr->num_key; i++) {
+            maintain_child(new_node, i);
+        }
+    }
+    return new_node;
 }
 
 /**
@@ -114,6 +154,28 @@ void IxIndexHandle::InsertIntoParent(IxNodeHandle *old_node, const char *key, Ix
     // 3. 获取 key 对应的 rid，并将 (key, rid) 插入到父亲结点
     // 4. 如果父亲结点仍需要继续分裂，则进行递归插入
     // 提示：记得 unpin page
+    if (old_node->IsRootPage()) {
+        //如果是根结点，需要新建一个根，作为原本根结点的祖先。
+        IxNodeHandle *new_root = CreateNode();
+        new_root->page_hdr->is_leaf = false;
+        new_root->page_hdr->num_key = 0;
+        new_root->page_hdr->parent = INVALID_PAGE_ID;
+        new_root->page_hdr->next_free_page_no = IX_NO_PAGE;
+        old_node->SetParentPageNo(new_root->GetPageNo());
+        new_node->SetParentPageNo(new_root->GetPageNo());
+        UpdateRootPageNo(new_root->GetPageNo());
+        new_root->insert_pair(0, old_node->get_key(0), (Rid){old_node->GetPageNo(), -1});
+        buffer_pool_manager_->UnpinPage(new_root->GetPageId(), true);
+    }
+    IxNodeHandle *parent = FetchNode(old_node->GetParentPageNo());
+    int pos = parent->find_child(old_node);
+    parent->insert_pair(pos + 1, key, (Rid){new_node->GetPageNo(), -1});
+    if (parent->page_hdr->num_key == file_hdr_.btree_order) {
+        IxNodeHandle *p_newnode = Split(parent);
+        InsertIntoParent(parent, p_newnode->get_key(0), p_newnode, transaction);
+        buffer_pool_manager_->UnpinPage(p_newnode->GetPageId(), true);
+    }
+    buffer_pool_manager_->UnpinPage(parent->GetPageId(), true);
 }
 
 /**

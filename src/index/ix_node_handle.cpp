@@ -13,7 +13,7 @@ int IxNodeHandle::lower_bound(const char *target) const {
     int l = 0, r = page_hdr->num_key;
     while (l < r) {
         int mid = l + r >> 1;
-        if (ix_compare(target, get_key(mid),  file_hdr->col_type, file_hdr->col_len) > 0) {
+        if (ix_compare(target, get_key(mid), file_hdr->col_type, file_hdr->col_len) > 0) {
             l = mid + 1;
         } else {
             r = mid;
@@ -102,7 +102,19 @@ void IxNodeHandle::insert_pairs(int pos, const char *key, const Rid *rid, int n)
     // 2. 通过 key 获取 n 个连续键值对的 key 值，并把 n 个 key 值插入到 pos 位置
     // 3. 通过 rid 获取 n 个连续键值对的 rid 值，并把 n 个 rid 值插入到 pos 位置
     // 4. 更新当前节点的键数量
-    
+    if (pos < 0 || pos > page_hdr->num_key) {
+        return;
+    }
+    int new_num_key = page_hdr->num_key + n;
+    int copy_num = page_hdr->num_key - pos;
+    int new_pos = pos + n;
+    char *new_key = get_key(new_pos), *old_key = get_key(pos);
+    Rid *new_rid = get_rid(new_pos), *old_rid = get_rid(pos);
+    memmove(new_key, old_key, copy_num * file_hdr->col_len);
+    memmove(new_rid, old_rid, copy_num * sizeof(Rid));
+    memcpy(old_key, key, n * file_hdr->col_len);
+    memcpy(old_rid, rid, n * sizeof(Rid)); 
+    page_hdr->num_key = new_num_key;
 }
 
 /**
@@ -123,8 +135,12 @@ int IxNodeHandle::Insert(const char *key, const Rid &value) {
     // 2. 如果 key 重复则不插入
     // 3. 如果 key 不重复则插入键值对
     // 4. 返回完成插入操作之后的键值对数量
-
-    return -1;
+    int idx = lower_bound(key);
+    if (idx != page_hdr->num_key && ix_compare(get_key(idx), key, file_hdr->col_type, file_hdr->col_len) == 0) {
+        return page_hdr->num_key;
+    }
+    insert_pair(idx, key, value);
+    return page_hdr->num_key;
 }
 
 /**
