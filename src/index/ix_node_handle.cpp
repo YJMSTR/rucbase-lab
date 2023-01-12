@@ -102,9 +102,7 @@ void IxNodeHandle::insert_pairs(int pos, const char *key, const Rid *rid, int n)
     // 2. 通过 key 获取 n 个连续键值对的 key 值，并把 n 个 key 值插入到 pos 位置
     // 3. 通过 rid 获取 n 个连续键值对的 rid 值，并把 n 个 rid 值插入到 pos 位置
     // 4. 更新当前节点的键数量
-    if (pos < 0 || pos > page_hdr->num_key) {
-        return;
-    }
+    assert (pos >= 0 && pos <= page_hdr->num_key);
     int new_num_key = page_hdr->num_key + n;
     int copy_num = page_hdr->num_key - pos;
     int new_pos = pos + n;
@@ -153,7 +151,12 @@ void IxNodeHandle::erase_pair(int pos) {
     // 1. 删除该位置的 key
     // 2. 删除该位置的 rid
     // 3. 更新结点的键值对数量
-
+    assert (pos >= 0 && pos < page_hdr->num_key);
+    char *old_key = get_key(pos), *new_key = get_key(pos+1);
+    Rid *old_rid = get_rid(pos), *new_rid = get_rid(pos+1);
+    memmove(old_key, new_key, (page_hdr->num_key - 1 - pos) * file_hdr->col_len);
+    memmove(old_rid, new_rid, (page_hdr->num_key - 1 - pos) * sizeof(Rid));
+    page_hdr->num_key--;
 }
 
 /**
@@ -167,8 +170,11 @@ int IxNodeHandle::Remove(const char *key) {
     // 1. 查找要删除键值对的位置
     // 2. 如果要删除的键值对存在，删除键值对
     // 3. 返回完成删除操作后的键值对数量
-
-    return -1;
+    int pos = lower_bound(key);
+    if ((pos != page_hdr->num_key) && (ix_compare(key, get_key(pos), file_hdr->col_type, file_hdr->col_len) == 0)) {
+        erase_pair(pos);
+    }
+    return page_hdr->num_key;
 }
 
 /**

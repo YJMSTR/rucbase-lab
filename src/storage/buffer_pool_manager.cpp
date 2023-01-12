@@ -106,6 +106,7 @@ bool BufferPoolManager::UnpinPage(PageId page_id, bool is_dirty) {
     std :: scoped_lock lock{latch_};
     if (page_table_.count(page_id)) {
         frame_id_t frame_id = page_table_[page_id];
+        //printf("node = %d pin = %d\n", pages_[frame_id].GetPageId().page_no, pages_[frame_id].pin_count_);
         if (pages_[frame_id].pin_count_ <= 0) {
             return false;
         } else {
